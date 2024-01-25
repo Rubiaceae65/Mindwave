@@ -1,10 +1,11 @@
+#!/usr/bin/env python3
 import time
-import mindwave
+import mindwavebluetooth
 import pandas as pd
 from datetime import datetime
 
 
-headset = mindwave.Headset('COM6')
+headset = mindwavebluetooth.Headset('notused')
 time.sleep(10)
 
 # print headers

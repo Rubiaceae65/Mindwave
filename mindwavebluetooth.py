@@ -10,25 +10,85 @@ pp = pprint.PrettyPrinter(indent=4)
 import bluetooth
 import socket
 
+#SAMPLING_RATE = 512
+##################
+# command byte
+##################
 
-# Byte codes
+# modes lowest four bits
+#ATTENTION_OUTPUT = 1
+#MEDITATION_OUTPUT = 2
+#RAW_OUTPUT = 4
+# set for 57.6k, unset for 9600 baud
+#BAUD_RATE = 8
+###########################
+# command bytes, upper four
+
+SEND_BYTE = b'\x0b'
+
+###################
+# single Byte codes
+###################
+
+POOR_SIGNAL =           b'\x02'
+HEART_RATE  =           b'\x03'
+ATTENTION =             b'\x04'
+MEDITATION =            b'\x05'
+#8BIT_RAW =              b'\x06'
+RAW_MARKER =            b'\x07'
+
+#########################################
+# multi byte codes, extended code level 0
+##########################################
+
+# raw wave value, 2 bytes, single big-endian 16-bit two's compliment signed value
+#RAW_Wave_Value =        b'\x80'
+RAW_VALUE =             b'\x80'
+
+# eeg_power, 32 bytes, eign big-endian 4-byte ieee 754
+EEG_POWER_VALUES =       ('delta', 'theta', 'low-alpha', 'hight-alpha', 'low-beta', 'high-beta', 'low-gamma', 'mid-gamma')
+EEG_POWER =             b'\x81'
+
+# asic eeg power, 24 bytes, 8 big endian 3-byte unsigned int
+ASIC_EEG_POWER_VALUES =        ('delta', 'theta', 'low-alpha', 'hight-alpha', 'low-beta', 'high-beta', 'low-gamma', 'mid-gamma')
+ASIC_EEG_POWER =        b'\x83'
+
+# rrinterval, two byt big-endian unsigned int representing the milliseconds between two R-peaks
+RRINTERVAL = b'\x86'
+
+#################################################
 CONNECT =               b'\xc0'
 DISCONNECT =            b'\xc1'
 AUTOCONNECT =           b'\xc2'
 SYNC =                  b'\xaa'
 EXCODE =                b'\x55'
-POOR_SIGNAL =           b'\x02'
-ATTENTION =             b'\x04'
-MEDITATION =            b'\x05'
+
 BLINK =                 b'\x16'
 HEADSET_CONNECTED =     b'\xd0'
 HEADSET_NOT_FOUND =     b'\xd1'
 HEADSET_DISCONNECTED =  b'\xd2'
 REQUEST_DENIED =        b'\xd3'
 STANDBY_SCAN =          b'\xd4'
-RAW_VALUE =             b'\x80'
-ASIC_EEG_POWER =        b'\x83'
-#\x00e\x18\xaa\xaa\x04\x80\x02\x00k\x12\xaa\xaa\x04\x80\x02\x00a\x1c\xaa\xaa\x04\x80\x02\x00I4\xaa\xaa\x04\x80\x02\x00<A\xaa\xaa\x04\x80\x02\x00R+\xaa\xaa\x04\x80\x02\x00`\x1d\xaa\xaa\x04\x80\x02\x00H5\xaa\xaa\x04\x80\x02\x003J\xaa\xaa\x04\x80\x02\x003J\xaa\xaa\x04\x80\x02\x002K\xaa\xaa\x04\x80\x02\x00\'V\xaa\xaa\x04\x80\x02\x00\'V\xaa\xaa\x04\x80\x02\x00&W\xaa\xaa\x04\x80\x02\x008E\xaa\xaa\x04\x80\x02\x00U(\xaa\xaa\x04\x80\x02\x00h\x15\xaa\xaa\x04\x80\x02\x00q\x0c\xaa\xaa\x04\x80\x02\x00V\'\xaa\xaa\x04\x80\x02\x00%X\xaa\xaa\x04\x80\x02\x00\x06w\xaa\xaa\x04\x80\x02\x00\x17f\xaa\xaa\x04\x80\x02\x00\'V\xaa\xaa\x04\x80\x02\x00\x14i\xaa\xaa\x04\x80\x02\x00\x15h\xaa\xaa\x04\x80\x02\x004I\xaa\xaa\x04\x80\x02\x00R+\xaa\xaa\x04\x80\x02\x00R+\xaa\xaa\x04\x80\x02\x000M\xaa\xaa\x04\x80\x02\x00\x13j\xaa\xaa\x04\x80\x02\x00\x17f\xaa\xaa\x04\x80\x02\x00"[\xaa\xaa\x04\x80\x02\x00(U\xaa\xaa\x04\x80\x02\x00|\x01\xaa\xaa\x04\x80\x02\x00\xb9\xc4\xaa\xaa\x04\x80\x02\x00\x9b\xe2\xaa\xaa\x04\x80\x02\x00V\'\xaa\xaa\x04\x80\x02\x00\x1ca\xaa\xaa\x04\x80\x02\x00(U\xaa\xaa\x04\x80\x02\x00\\!\xaa\xaa\x04\x80\x02\x00m\x10\xaa\xaa\x04\x80\x02\x00T)\xaa\xaa\x04\x80\x02\x002K\xaa\xaa\x04\x80\x02\x00\x11l\xaa\xaa\x04\x80\x02\xff\xeb\x93\xaa\xaa
+
+
+#\x00e\x18
+
+# [sync] [sync] [plength] [payload] [chksum]
+# 1b     1b     1b        max 169b  1b
+# \xaa   \xaa   \x04      \x80\x02\x00k\x12
+#\xaa\xaa       \x04\x80\x02\x00a\x1c
+#\xaa\xaa\x04\x80\x02\x00I4
+#\xaa\xaa\x04\x80\x02\x00<A
+#\xaa\xaa\x04\x80\x02\x00R+
+#\xaa\xaa\x04\x80\x02\x00`\x1d
+#\xaa\xaa\x04\x80\x02\x00H5
+#\xaa\xaa\x04\x80\x02\x003J
+#\xaa\xaa\x04\x80\x02\x003J
+#\xaa\xaa\x04\x80\x02\x002K\xaa\xaa\x04\x80\x02\x00\'V\xaa\xaa\x04\x80\x02\x00\'V\xaa\xaa\x04\x80\x02\x00&W\xaa\xaa\x04\x80\x02\x008E\xaa\xaa\x04\x80\x02\x00U(\xaa\xaa\x04\x80\x02\x00h\x15\xaa\xaa\x04\x80\x02\x00q\x0c\xaa\xaa\x04\x80\x02\x00V\'\xaa\xaa\x04\x80\x02\x00%X\xaa\xaa\x04\x80\x02\x00\x06w\xaa\xaa\x04\x80\x02\x00\x17f\xaa\xaa\x04\x80\x02\x00\'V\xaa\xaa\x04\x80\x02\x00\x14i\xaa\xaa\x04\x80\x02\x00\x15h\xaa\xaa\x04\x80\x02\x004I\xaa\xaa\x04\x80\x02\x00R+\xaa\xaa\x04\x80\x02\x00R+\xaa\xaa\x04\x80\x02\x000M\xaa\xaa\x04\x80\x02\x00\x13j\xaa\xaa\x04\x80\x02\x00\x17f\xaa\xaa\x04\x80\x02\x00"[\xaa\xaa\x04\x80\x02\x00(U\xaa\xaa\x04\x80\x02\x00|\x01\xaa\xaa\x04\x80\x02\x00\xb9\xc4\xaa\xaa\x04\x80\x02\x00\x9b\xe2\xaa\xaa\x04\x80\x02\x00V\'\xaa\xaa\x04\x80\x02\x00\x1ca\xaa\xaa\x04\x80\x02\x00(U\xaa\xaa\x04\x80\x02\x00\\!\xaa\xaa\x04\x80\x02\x00m\x10\xaa\xaa\x04\x80\x02\x00T)\xaa\xaa\x04\x80\x02\x002K\xaa\xaa\x04\x80\x02\x00\x11l\xaa\xaa\x04\x80\x02\xff\xeb\x93\xaa\xaa
+
+# DataRow
+# (EXCODE]...) [CODE] ([VLENGTH]) [VALUE...]
+
 # Status codes
 STATUS_CONNECTED = 'connected'
 STATUS_SCANNING = 'scanning'
@@ -47,7 +107,9 @@ class Headset(object):
             """Set up the listener device."""
             self.headset = headset
             self.counter = 0
+            self.valid_packet_counter = 0
             super(Headset.DongleListener, self).__init__(*args, **kwargs)
+
 
         def run(self):
             """Run the listener thread."""
@@ -56,41 +118,48 @@ class Headset(object):
             self.headset.running = True
 
             # Re-apply settings to ensure packet stream
-            s.write(DISCONNECT)
-            d = s.getSettingsDict()
-            for i in range(2):
-                d['rtscts'] = not d['rtscts']
-                s.applySettingsDict(d)
+            #s.write(DISCONNECT)
+            #d = s.getSettingsDict()
+            #for i in range(2):
+            #    d['rtscts'] = not d['rtscts']
+            #    s.applySettingsDict(d)
 
             while self.headset.running:
                 # Begin listening for packets
-                try:
-                    if s.read() == SYNC and s.read() == SYNC:
-                        # Packet found, determine plength
-                        while True:
-                            plength = int.from_bytes(s.read(), byteorder='big')
-                            if plength != 170:
-                                break
-                        if plength > 170:
-                            continue
+                #FIXME try:
+                if s.recv(1) == SYNC and s.recv(1) == SYNC:
+                    # Packet found, determine plength
+                    while True:
+                        plength = int.from_bytes(s.recv(1), byteorder='big')
+                        if plength != 170:
+                            break
+                    if plength > 170:
+                        continue
 
-                        # Read in the payload
-                        payload = s.read(plength)
+                    # Read in the payload
+                    payload = s.recv(plength)
 
-                        # Verify its checksum
-                        val = sum(b for b in payload[:-1])
-                        val &= 0xff
-                        val = ~val & 0xff
-                        chksum = int.from_bytes(s.read(), byteorder='big')
+                    # Verify its checksum
+                    val = sum(b for b in payload[:-1])
+                    val &= 0xff
+                    val = ~val & 0xff
+                    chksum = int.from_bytes(s.recv(1), byteorder='big')
 
-                        # if val == chksum:
-                        if True:  # ignore bad checksums
-                            self.parse_payload(payload)
+                    #if val == chksum:
+                    if True:  # ignore bad checksums
+                        self.valid_packet_counter += 1
+                        print('valid packet nr: ' + str(self.valid_packet_counter))
+                        if self.valid_packet_counter == 1:
+                            # first valid packet, send command
+                            s.send(SEND_BYTE)
+                        self.parse_payload(payload)
+                    else: 
+                        print('invalid checksum' + str(payload))
                 # FIXME
-                except serial.SerialException:
-                    break
-                except (select.error, OSError):
-                    break
+                #except serial.SerialException:
+                #    break
+                #except (select.error, OSError):
+                #    break
 
             print('Closing connection...')
             if s and s.isOpen():
@@ -124,6 +193,7 @@ class Headset(object):
                         value, payload = payload[0], payload[1:]
                     except IndexError:
                         pass
+                    print('got single byte code: ' + str(code))
                     if code_char == POOR_SIGNAL:
                         # Poor signal
                         old_poor_signal = self.headset.poor_signal
@@ -160,12 +230,13 @@ class Headset(object):
                     except IndexError:
                         continue
                     value, payload = payload[:vlength], payload[vlength:]
-
+                    print('got multi byte code_char: ' + str(code) )
                     if code_char == RAW_VALUE and len(value) >= 2:
                         raw = value[0]*256+value[1]
                         if (raw >= 32768):
                             raw = raw-65536
                         self.headset.raw_value = raw
+                        print('raw: ' + str(raw))
                         for handler in self.headset.raw_value_handlers:
                             handler(self.headset, self.headset.raw_value)
                     if code_char == HEADSET_CONNECTED:
@@ -215,7 +286,11 @@ class Headset(object):
                     elif code_char == ASIC_EEG_POWER:
                         j = 0
                         for i in ['delta', 'theta', 'low-alpha', 'high-alpha', 'low-beta', 'high-beta', 'low-gamma', 'mid-gamma']:
-                            self.headset.waves[i] = value[j]*255*255+value[j+1]*255+value[j+2]
+                            try:
+                                self.headset.waves[i] = value[j]*255*255+value[j+1]*255+value[j+2]
+                            except IndexError:
+                                print('IndexError for i: ' + str(i) + 'j: ' + str(j) )
+                            print(str(self.headset.waves))
                             j += 3
                         for handler in self.headset.waves_handlers:
                             handler(self.headset, self.headset.waves)
@@ -255,12 +330,14 @@ class Headset(object):
         # Open the socket
         if open_serial:
             self.bluetooth_open()
+            print('bluetooth opened')
 
     def bluetooth_open(self):
         print("opening device")
         dongle_success = False
         while not dongle_success:
             if not self.dongle or not self.dongle.isOpen(): 
+                print('scanning...')
                 scan_results = bluetooth.discover_devices(lookup_names=True)
                 for addr, name in scan_results:
                     #print(addr, name)
@@ -279,7 +356,19 @@ class Headset(object):
                                     self.dongle.connect((addr, svc["port"]))
                                     pp.pprint(self.dongle)
                                     try:
-                                        firstdata = self.dongle.recv(1024)
+                                        self.dongle.setblocking(0)
+                                        ready = select.select([self.dongle], [], [], 1)
+                                        if ready[0]:
+                                            firstdata = self.dongle.recv(1)
+                                        else:
+                                            print('firstdata timeout, thats the weird bug in the dongle, try sending something')
+                                            s.send(SEND_BYTE)
+                                            firstdata = '1'
+                                        self.dongle.setblocking(1)
+
+
+                                    except UnboundLocalError:
+                                        dongle_success = False
                                     except TimeoutError:
                                         dongle_success = False
                                    
@@ -290,6 +379,15 @@ class Headset(object):
 
                         else:
                             print("no services found, very weird")
+        if not self.listener or not self.listener.isAlive():
+            print('creating new listener')
+            self.listener = self.DongleListener(self)
+            self.listener.daemon = True
+            self.listener.start()
+        else:
+            print('self.listener already exists, weird')
+
+
 
     def bluetooth_close():
         self.dongle.close()

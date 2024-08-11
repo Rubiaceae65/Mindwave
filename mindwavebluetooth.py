@@ -126,36 +126,38 @@ class Headset(object):
 
             while self.headset.running:
                 # Begin listening for packets
-                #FIXME try:
-                if s.recv(1) == SYNC and s.recv(1) == SYNC:
-                    # Packet found, determine plength
-                    while True:
-                        plength = int.from_bytes(s.recv(1), byteorder='big')
-                        if plength != 170:
-                            break
-                    if plength > 170:
-                        continue
+                try:
+                    if s.recv(1) == SYNC and s.recv(1) == SYNC:
+                        # Packet found, determine plength
+                        while True:
+                            plength = int.from_bytes(s.recv(1), byteorder='big')
+                            if plength != 170:
+                                break
+                        if plength > 170:
+                            continue
 
-                    # Read in the payload
-                    payload = s.recv(plength)
+                        # Read in the payload
+                        payload = s.recv(plength)
 
-                    # Verify its checksum
-                    val = sum(b for b in payload[:-1])
-                    val &= 0xff
-                    val = ~val & 0xff
-                    chksum = int.from_bytes(s.recv(1), byteorder='big')
+                        # Verify its checksum
+                        val = sum(b for b in payload[:-1])
+                        val &= 0xff
+                        val = ~val & 0xff
+                        chksum = int.from_bytes(s.recv(1), byteorder='big')
 
-                    #if val == chksum:
-                    if True:  # ignore bad checksums
-                        self.valid_packet_counter += 1
-                        print('valid packet nr: ' + str(self.valid_packet_counter))
-                        if self.valid_packet_counter == 1:
-                            # first valid packet, send command
-                            s.send(SEND_BYTE)
-                        self.parse_payload(payload)
-                    else: 
-                        print('invalid checksum' + str(payload))
+                        #if val == chksum:
+                        if True:  # ignore bad checksums
+                            self.valid_packet_counter += 1
+                            #print('valid packet nr: ' + str(self.valid_packet_counter))
+                            if self.valid_packet_counter == 1:
+                                # first valid packet, send command
+                                s.send(SEND_BYTE)
+                            self.parse_payload(payload)
+                        else: 
+                            print('invalid checksum' + str(payload))
                 # FIXME
+                except TimeoutError:
+                    break
                 #except serial.SerialException:
                 #    break
                 #except (select.error, OSError):
@@ -192,6 +194,9 @@ class Headset(object):
                     try:
                         value, payload = payload[0], payload[1:]
                     except IndexError:
+                        print('indexerror, single-byte-code')
+                        value = 0
+                        payload = 0
                         pass
                     print('got single byte code: ' + str(code))
                     if code_char == POOR_SIGNAL:
@@ -230,13 +235,13 @@ class Headset(object):
                     except IndexError:
                         continue
                     value, payload = payload[:vlength], payload[vlength:]
-                    print('got multi byte code_char: ' + str(code) )
+                    #print('got multi byte code_char: ' + str(code) )
                     if code_char == RAW_VALUE and len(value) >= 2:
                         raw = value[0]*256+value[1]
                         if (raw >= 32768):
                             raw = raw-65536
                         self.headset.raw_value = raw
-                        print('raw: ' + str(raw))
+                        print(str(raw), end=' ', flush=True)
                         for handler in self.headset.raw_value_handlers:
                             handler(self.headset, self.headset.raw_value)
                     if code_char == HEADSET_CONNECTED:
@@ -362,7 +367,7 @@ class Headset(object):
                                             firstdata = self.dongle.recv(1)
                                         else:
                                             print('firstdata timeout, thats the weird bug in the dongle, try sending something')
-                                            s.send(SEND_BYTE)
+                                            self.dongle.send(SEND_BYTE)
                                             firstdata = '1'
                                         self.dongle.setblocking(1)
 
